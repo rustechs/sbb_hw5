@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 
 '''
-    Robot Interface node for HW3.
+    Robot Interface node for HW5.
 
-     Query the position of the robot's arm and return it
-    *Returns the configuration, and the cartesian pose of end-effector
-    *Pick-and-place routine that accepts source and destination coordinates
+    It has been altered since HW3 to use MoveIt.
+    This simplifies things quite a bit.
+    For example, we no longer zero; we use the global frame.
+    We're also much less interested in doing IK stuff.
 '''
 
-import argparse, sys, rospy, cv2, cv_bridge
-import baxter_interface, rospkg
+import sys, rospy
+import baxter_interface
 
-import roslib
-
-from bax_hw3.msg import *
+from moveit_commander import MoveGroupCommander
+from moveit_commander import RobotCommander
 
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
 from std_msgs.msg import Header
@@ -24,12 +24,12 @@ from baxter_core_msgs.srv import (
 from sensor_msgs.msg import Image
 
 # The baxter class definition
-# Acts as a wrapper for many useful baxter_interface methods
+# Acts as a wrapper for many useful baxter_interface, moveit methods
 # Also spawns a node to interface with IK Service
 class Baxter():
 
     # Baxter class constructor
-    def __init__(self, baxter_name="Baxter"):
+    def __init__(self, baxter_name="Baxter", do_grippers = True):
 
         rospy.init_node("Baxter_Node")
         
@@ -38,52 +38,17 @@ class Baxter():
 
         # self.enable() # Probably should be called manually
         
-        # Create baxter arm instances
-        self.right_arm = baxter_interface.Limb('right')
-        self.left_arm = baxter_interface.Limb('left')
-
-        self.BaxEnable = baxter_interface.RobotEnable()
+        # Create a moveit group for each arm
+        self.lg = MoveGroupCommander("left_arm")
+        self.rg = MoveGroupCommander("right_arm")
+        g.set_planner_id('RRTConnectkConfigDefault')
 
         # Create baxter gripper instances
-        self.right_gripper = baxter_interface.Gripper('right')
-        self.left_gripper = baxter_interface.Gripper('left')
-        self.right_gripper.calibrate()
-        self.left_gripper.calibrate()
-
-        # Zero to wherever the left end is
-        self.zero()
-
-        # Set up publishing to the face
-        rospack = rospkg.RosPack()
-        self.impath = rospack.get_path('bax_hw3') + '/img/'
-        self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=10)
-
-    # Tansformation from a local frame Pose to global frame
-    def tfBaxter(self, wsPose):
-        return Pose( Point(wsPose.position.x + self.zeroPose.position.x,
-                           wsPose.position.y + self.zeroPose.position.y,
-                           wsPose.position.z + self.zeroPose.position.z,),
-                     wsPose.orientation)
-
-    # Transformation from global frame to the local (zero'd) frame
-    def tfBaxterInv(self, globPose):
-        return Pose( Point(globPose.position.x - self.zeroPose.position.x,
-                           globPose.position.y - self.zeroPose.position.y,
-                           globPose.position.z - self.zeroPose.position.z,),
-                     globPose.orientation)
-            
-    #The pose at calibration 0 point of our local working frame
-    def zero(self, rel = None):
-        if rel is None:
-            self.zeroPose = self.getEndPose('left',raw=True)
-        else:
-            self.zeroPose = self.tfBaxter(rel)
-
-    def face(self, fname):
-        pass
-        img = cv2.imread(self.impath + fname + '.png')
-        msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
-        self.facepub.publish(msg)
+        if do_grippers:
+            self.right_gripper = baxter_interface.Gripper('right')
+            self.left_gripper = baxter_interface.Gripper('left')
+            self.right_gripper.calibrate()
+            self.left_gripper.calibrate()
 
     # Enable the robot
     # Must be manually called after instantiation 
@@ -217,15 +182,14 @@ class Baxter():
             raise
     
     # Method for getting joint configuration
-    # Direct call to baxter_interface
-    # Returns: dict({str:float})
-    # unordered dict of joint name Keys to angle (rad) Values
+    # Direct call to moveit
+    # Returns: list of floats
     def getJoints(self, limbSide):
         try:
             if limbSide == 'left':
-                return self.left_arm.joint_angles()
+                return self.lg.get_current_joint_values()
             elif limbSide == 'right':
-                return self.right_arm.joint_angles()
+                return self.rg.get_current_joint_values()
             else:
                 raise
         except:
@@ -234,64 +198,42 @@ class Baxter():
 
 
     # Method for getting end-effector position
-    # Angular pose will always be top-down, so wrist-gripper displacement doesn't have to be factored in.
-    # Returns the raw ('base') Pose if raw is set to True
-    # Otherwise, returns pose relative to the origin zeroPose
-    def getEndPose(self,limbSide,raw=False):
+    def getEndPose(self, limbSide):
         
         # Conveniently call Baxter's endpoint_pose() methods
         try:
             if limbSide == 'left':
-                out = self.left_arm.endpoint_pose() 
+                return self.lg.get_current_pose() 
             elif limbSide == 'right':
-                out = self.right_arm.endpoint_pose()
+                return self.rg.get_current_pose()
             else: 
                 raise
         except:
             rospy.logwarn('Invalid limb side name #: ' + limbSide)
             raise
 
-        # From dict to Pose object
-        out = Pose(Point(*out['position']), Quaternion(*out['orientation']))
-        if not raw:
-            out = self.tfBaxterInv(out)
-        return  out
-
     # Method for setting joint positions
-    # Direct call to baxter_interface
+    # Direct call to moveit, including go
     def setJoints(self,limbSide,angles):
         if limbSide == 'left':
-            self.left_arm.move_to_joint_positions(angles)
+            self.lg.set_joint_value_target(angles)
+            self.lg.go()
         elif limbSide == 'right':
-            self.right_arm.move_to_joint_positions(angles)
+            self.rg.set_joint_value_target(angles)
+            self.rg.go()
         else:
             rospy.logwarn('Incorrect limb string: %s' % limbSide)
 
-
-    # Method for calculating joint angles given a desired end-effector pose
-    def getIKGripper(self, limbSide, setPose):
-
-        # Prepare the request
-        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-        ps = PoseStamped(header=hdr, pose=setPose,)
-        ikreq = SolvePositionIKRequest([ps], [], 0)
-
-        # Make the service call
-        srvName = 'ExternalTools/' + limbSide + '/PositionKinematicsNode/IKService'
-        srvAlias = rospy.ServiceProxy(srvName, SolvePositionIK)
-        rospy.wait_for_service(srvName)
-        resp = srvAlias(ikreq)
-
-        # Get IK response and convert to joint position dict
-        if (resp.isValid[0]):
-            return dict(zip(resp.joints[0].name, resp.joints[0].position))
-        else:
-            print("IK service: INVALID POSE - No Valid Joint Solution Found.")
-
-
     # Method for setting cartesian position of hand
-    # setPose is a Pose relative to the home zeroPose
+    # setPose is a global pose
     def setEndPose(self, limbSide, setPose):
-        setPose = self.tfBaxter(setPose)
-        ik_joints = self.getIKGripper(limbSide, setPose)
-        self.setJoints(limbSide,ik_joints)
+        try:
+            if limbSide == 'left':
+                return self.lg.set_pose_target(setPose) 
+            elif limbSide == 'right':
+                return self.rg.set_pose_target(setPose)
+            else: 
+                raise
+        except:
+            rospy.logwarn('Invalid limb side name #: ' + limbSide)
+            raise

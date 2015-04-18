@@ -3,6 +3,7 @@
 '''
     Quick MoveIt interface pick-place test script
     Accomplishes HW5 objective 2
+    Works by specifying the block and goal positions by using cuff
 '''
 
 import rospy
@@ -18,8 +19,8 @@ if __name__ == '__main__':
 
     while True:
         print 'Current pose is '
-        p = g.get_current_pose()
-        print p.pose
+        ps = g.get_current_pose()
+        print ps.pose
         print ''
         print 'new position:'
         x = input('x: ')
@@ -30,7 +31,7 @@ if __name__ == '__main__':
         #yo = input('y: ')
         #zo = input('z: ')
         #wo = input('w: ')
-
+        import pdb; pdb.set_trace()
         #g.set_pose_target(Pose(Point(x,y,z), Quaternion(xo,yo,zo,wo)))
-        g.set_pose_target(Pose(Point(x,y,z),p.pose.orientation))
+        g.set_pose_target(Pose(Point(x,y,z),ps.pose.orientation))
         g.go()
