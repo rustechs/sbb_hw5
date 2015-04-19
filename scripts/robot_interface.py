@@ -8,7 +8,7 @@
     baxter_interface tools. Perhaps with some speed tweaks.
 '''
 
-import sargparse, sys, rospy, cv2, cv_bridge
+import argparse, sys, rospy, cv2, cv_bridge
 import baxter_interface, rospkg
 
 from sbb_hw5.msg import *
