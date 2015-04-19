@@ -93,6 +93,9 @@ def main(img_path):
     # Find COM and Orientation
     blockCOM = np.mean(blockCorners, axis=0)
 
+    leftNodes[blockCorners[:,0]<blockCOM[0]]                 #NODES TO THE LIEFT OF COM_x 
+    orientation = leftNodes[0,:] - leftNodes[1,:]
+    orientation = orientation / np.linalg.norm(orientation)  #Unit Vector
 
 
 if __name__ == '__main__':
