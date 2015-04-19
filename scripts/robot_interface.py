@@ -55,7 +55,7 @@ class Baxter():
 
         # Set up publishing to the face
         rospack = rospkg.RosPack()
-        self.impath = rospack.get_path('bax_hw3') + '/img/'
+        self.impath = rospack.get_path('sbb_hw5') + '/img/'
         self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=10)
 
     def face(self, fname):
