@@ -244,7 +244,7 @@ class Baxter():
 
 
     # Camera Settings
-    def setCamera(self, name, res, fps):
+    def setCamera(self, name, res=(960,600), fps=10):
     # name = left, right
     # res = [(1280, 800), (960, 600), (640, 400), (480, 300), (384, 240), (320, 200)]
     # fps = frames per second
@@ -259,7 +259,7 @@ class Baxter():
                 # self.lhc.white_balance_green(self, value)  # White balance green. 
                 # self.lhc.white_balance_blue(self, value)   # White balance blue.             
             elif name == 'right':
-                self.lhc.open(self)
+                self.rhc.open(self)
                 self.rhc.resolution(self, res)
                 self.rhc.fps(self, fps)
             else:
