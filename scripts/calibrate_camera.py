@@ -24,20 +24,25 @@ def main(img_path):
     cv2.destroyAllWindows()
     
     # Convert to HSV
-    imgHVT = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
+    imgHSV = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
         
     # Get image size
-    h,w,d = imgHVT.shape
+    h,w,d = imgHSV.shape
     print 'Image Dimensions: (' + str(h) + ',' + str(w) + ')' 
 
     # Image center
     center = (int(h/2),int(w/2))
 
     # Threshold only the color we want
-    MIN = np.array([25,60,10])
-    MAX = np.array([85,255,255])
+    # Green bowl
+    # MIN = np.array([25,60,10])
+    # MAX = np.array([85,255,255])
 
-    imgThresh = cv2.inRange(imgHVT, MIN, MAX)
+    # Blue block
+    MIN = np.array([90,30,10])
+    MAX = np.array([140,160,160])
+
+    imgThresh = cv2.inRange(imgHSV, MIN, MAX)
         
     cv2.imshow('Threshold Image',imgThresh)
     cv2.waitKey()
