@@ -27,10 +27,13 @@ class Baxter():
     # Baxter class constructor
     def __init__(self, baxter_name="Baxter", do_grippers = True):
 
-        rospy.init_node("Baxter_Node")
+        rospy.init_node("Baxter_Node", anonymous = True)
         
         # Give him a creative name
         self.name = baxter_name
+
+        # Create head instance
+        self.head = baxter_interface.Head()
         
         # Create baxter arm instances
         self.right_arm = baxter_interface.Limb('right')
@@ -56,10 +59,15 @@ class Baxter():
         self.impath = rospack.get_path('sbb_hw5') + '/img/'
         self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=10)
 
+    # Change face to a file we have
     def face(self, fname):
         img = cv2.imread(self.impath + fname + '.png')
         msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
         self.facepub.publish(msg)
+
+    # Nodding
+    def nod(self):
+        self.head.command_nod()
 
     # Enable the robot
     # Must be manually called after instantiation 
@@ -260,11 +268,30 @@ class Baxter():
         else:
             print("IK service: INVALID POSE - No Valid Joint Solution Found.")
 
-    # Method for setting cartesian position of hand
+    # Methods for setting cartesian position of hand
     # setPose is a global pose
     def setEndPose(self, limbSide, setPose):
         ik_joints = self.getIKGripper(limbSide, setPose)
         self.setJoints(limbSide,ik_joints)
+
+    # This  particular method only changes x, y, z of pose
+    # Use by naming arguments you want to change
+    def setEndXYZO(self, limbSide, x = None, y = None, z = None, o = None):
+        ps = self.getEndPose(limbSide)
+        if x is None:
+            x = ps.position.x
+        if y is None:
+            y = ps.position.y
+        if z is None:
+            z = ps.position.z
+        if o is None:
+            o = ps.orientation
+        self.setEndPose(limbSide, Point(x, y, z), o)
+
+    def setEndOrientation(self, limbSide, o):
+        ps = self.getEndPose(limbSide)
+        ps.orientation = o
+        self.setEndPose(limbSide, ps)
 
     # Camera Settings
     def setCamera(self, name, res=(640,400), fps=10):

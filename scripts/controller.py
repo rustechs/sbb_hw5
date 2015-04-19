@@ -25,7 +25,7 @@ class Controller():
         self.tableZ = -.07
         self.scanZ = .3
         self.safeZ = .08
-        self.xyTol = 10
+        self.xyTol = .01
         self.thetaTol = .3
         self.bowlD = .15
         self.controlGain = .5
@@ -63,19 +63,20 @@ class Controller():
     def pix2m(self, pix):
         ps = self.baxter.getEndPose('right')
         height = ps.position.z - self.tableZ
-        return (pix * (height/self.pixCalZ) * pixCalD) / pixCalN
+        return (pix * (height/self.pixCalZ) * self.pixCalD) / self.pixCalN
 
     # This is the callback for processing incoming command messages.
     def goHome(self):
-        self.baxter.setEndPose(self.home)
+        self.baxter.setEndPose('right', self.home)
 
     # Get a response from CV service: found, x, y, theta (theta doesn't matter)
     # x, y are converted to meters before returning
     def getBowl(self):
         rospy.wait_for_service('find_stuff')
         bowl = self.cv('bowl')
+	oldx = bowl.x
         bowl.x = self.pix2m(bowl.y)
-        bowl.y = -self.pix2m(bowl.x)
+        bowl.y = -self.pix2m(oldx)
         return bowl
 
     # Get a response from CV service: found, x, y, theta
@@ -83,8 +84,9 @@ class Controller():
     def getBlock(self):
         rospy.wait_for_servce('find_stuff')
         block = self.cv('block')
+	oldx = bowl.x
         block.x = self.pix2m(block.y)
-        block.y = -self.pix2m(block.x)
+        block.y = -self.pix2m(oldx)
         return block
 
     # Coordinates pick-place action done by Baxter
@@ -113,7 +115,6 @@ class Controller():
         self.baxter.openGrip('right')
         self.baxter.setEndPose('right', ps)
         rospy.loginfo('Pick/place complete.')
-
 
     # This function attempts to put the end effector within sight of the bowl centroid.
     # If the current end pose does not accomplish this, it moves to a random pose in the 
@@ -160,9 +161,6 @@ class Controller():
         delTheta = 1000
         delY = 1000
         delX = 1000
-        ps = self.baxter.getEndPose('right')
-        ps.position.z = self.safeZ
-        self.baxter.setEndPose('right', ps)
 
         # Select objective function
         if objective == 'block':
@@ -174,22 +172,32 @@ class Controller():
         while True:
             ps = self.baxter.getEndPose('right')
             obj = objfun()
-            delTheta = obj.t
-            delY = obj.y
-            delX = obj.x
-            if (delTheta > self.thetaTol) or (delY > self.xyTol) or (delX > self.xyTol):
+            if not obj.found:
+                rospy.loginfo('Lost %s! Aborting control.' % objective)
+                return  
+            if objective == 'block':
+                delTheta = abs(obj.t)
+            else:
+                delTheta = 0
+            delY = abs(obj.y)
+            delX = abs(obj.x)
+            if (delTheta < thetaTol) and (delY < self.xyTol) and (delX < self.xyTol):
+                rospy.loginfo('Center control complete.')                
                 return ps
-            newx = clamp(ps.position.x - (delX * self.controlGain), self.xmin, self.xmax)
-            newy = clamp(ps.position.y - (delY * self.controlGain), self.ymin, self.ymax)
+            newx = clamp(ps.position.x - (obj.x * self.controlGain), self.xmin, self.xmax)
+            newy = clamp(ps.position.y - (obj.y * self.controlGain), self.ymin, self.ymax)
             newt = ps.orientation.w - delTheta
-            ps = Pose(Point(newx, newy, self.safeZ), Quaternion(1,0,0,newt))
-            self.baxter.setEndPose(ps)
+            ps = Pose(Point(newx, newy, ps.position.z), Quaternion(1,0,0,newt))
+            self.baxter.setEndPose('right', ps)
 
     # Performs the sequence of actions required to accomplish HW5 CV objectives.
     def execute(self):
         self.scanForBowl()
         self.controlToObject('bowl')
         self.scanForBlock()
+        ps = self.baxter.getEndPose('right')
+        ps.position.z = self.safeZ
+        self.baxter.setEndPose('right', ps)
         bPose = self.controlToObject('block')
         bPose.position.z = self.tableZ
         self.pickPlace(bPose, self.destination)
