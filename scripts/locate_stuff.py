@@ -12,7 +12,7 @@ class locate_stuff():
     def __init__(self):
         # Listen to camera image topic
         self.img_sub = rospy.Subscriber('cameras/right_hand_camera/image',Image,self.saveFrame)
-        self.img_serv = rospy.Service('find_stuff',FindStuffSrv,self.findStuff)
+        self.img_serv = rospy.Service('find_stuff',FindStuffSrv,self.servCall)
         
         # Create a image conversion bridge
         self.br = CvBridge()
@@ -25,9 +25,21 @@ class locate_stuff():
         except CvBridgeError, e:
             print e
 
-    def findStuff(self,data):
+    # Deal with service call by parsing argument, figuring out what to look for
+    def servCall(self,data):
         # Use latest image to look for stuff, return it
-        
+        if data.item == 'bowl':
+            return FindStuffSrvResponse(*findBowl())
+        elif data.item == 'block':
+            return FindStuffSrvResponse(*findBlock())
+        else
+            raspy.logerr("Incorrect service call argument, use either bowl or block")
+            raise
+
+    def findBowl(self):
+
+    def findBlock(self):
+
 
 # Main loop
 def main():
