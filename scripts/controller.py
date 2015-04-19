@@ -74,8 +74,8 @@ class Controller():
     def getBowl(self):
         rospy.wait_for_service('find_stuff')
         bowl = self.cv('bowl')
-        bowl.x = self.pix2m(bowl.x)
-        bowl.y = self.pix2m(bowl.y)
+        bowl.x = self.pix2m(bowl.y)
+        bowl.y = -self.pix2m(bowl.x)
         return bowl
 
     # Get a response from CV service: found, x, y, theta
@@ -83,8 +83,8 @@ class Controller():
     def getBlock(self):
         rospy.wait_for_servce('find_stuff')
         block = self.cv('block')
-        block.x = self.pix2m(block.x)
-        block.y = self.pix2m(block.y)
+        block.x = self.pix2m(block.y)
+        block.y = -self.pix2m(block.x)
         return block
 
     # Coordinates pick-place action done by Baxter
