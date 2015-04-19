@@ -25,14 +25,13 @@ class Controller():
         self.tableZ = -.07
         self.scanZ = .3
         self.safeZ = .08
-        self.pixTol = 10
+        self.xyTol = 10
         self.thetaTol = .3
         self.bowlD = .15
-
-        # Control gain includes the pixel to m conversion factor
-        # At z = .08 (table distance .15), pixels = 78, m = .044
-        # So multiply by .0013 to get m, then call gain ~ .8
-        self.controlGain = .0013 * .8 * (self.safeZ - self.tableZ)/.15
+        self.controlGain = .5
+        self.pixCalZ = .15
+        self.pixCalN = 78
+        self.pixCalD = .044
         self.xmin = .3
         self.ymin = -.6
         self.xmax = .8
@@ -58,19 +57,35 @@ class Controller():
         self.cv = rospy.ServiceProxy('find_stuff', FindStuffSrv)
         rospy.loginfo('Initialization successful.')
 
+    # This function converts pixels to meters on the table plan given a height.
+    # It assumes/requires a downward orientation.
+    # It takes care of checking the height off the table itself.
+    def pix2m(self, pix):
+        ps = self.baxter.getEndPose('right')
+        height = ps.position.z - self.tableZ
+        return (pix * (height/self.pixCalZ) * pixCalD) / pixCalN
+
     # This is the callback for processing incoming command messages.
     def goHome(self):
         self.baxter.setEndPose(self.home)
 
     # Get a response from CV service: found, x, y, theta (theta doesn't matter)
+    # x, y are converted to meters before returning
     def getBowl(self):
         rospy.wait_for_service('find_stuff')
-        return self.cv('bowl')
+        bowl = self.cv('bowl')
+        bowl.x = self.pix2m(bowl.x)
+        bowl.y = self.pix2m(bowl.y)
+        return bowl
 
     # Get a response from CV service: found, x, y, theta
+    # x, y are converted to meters before returning
     def getBlock(self):
         rospy.wait_for_servce('find_stuff')
-        return self.cv('block')
+        block = self.cv('block')
+        block.x = self.pix2m(block.x)
+        block.y = self.pix2m(block.y)
+        return block
 
     # Coordinates pick-place action done by Baxter
     # "from" and "to" need to be poses of the end link
@@ -133,12 +148,12 @@ class Controller():
                 ps = Pose(Point(xpos, ypos, self.scanZ), self.downwards)
                 self.baxter.setEndPose('right', ps)
 
-    # This function must be run only when we are reliably in range of the block.
+    # This function must be run only when we are reliably in range of an object
     # It performs choppy closed-loop semi-proportional control of the end effector
-    # until it is aligned and directly over the block.
-    def controlToBlock(self):
+    # until it is aligned and directly over the object.
+    def controlToObject(self, objective):
 
-        rospy.loginfo('Controlling to block center...')
+        rospy.loginfo('Controlling to %s center...' % objective)
 
         # Some setup: convenience function, limits, initial conditions
         clamp = lambda n, minn, maxn: max(min(maxn, n), minn)
@@ -149,26 +164,33 @@ class Controller():
         ps.position.z = self.safeZ
         self.baxter.setEndPose('right', ps)
 
+        # Select objective function
+        if objective == 'block':
+            objfun = lambda: self.getBlock()
+        else:
+            objfun = lambda: self.getBowl()
+
         # Control loop. Never. Give. Up.
         while True:
             ps = self.baxter.getEndPose('right')
-            block = self.getBlock()
-            delTheta = block.t
-            delY = block.y
-            delX = block.x
-            if (delTheta > self.thetaTol) or (delY > self.pixTol) or (delX > self.pixTol):
+            obj = objfun()
+            delTheta = obj.t
+            delY = obj.y
+            delX = obj.x
+            if (delTheta > self.thetaTol) or (delY > self.xyTol) or (delX > self.xyTol):
                 return ps
             newx = clamp(ps.position.x - (delX * self.controlGain), self.xmin, self.xmax)
             newy = clamp(ps.position.y - (delY * self.controlGain), self.ymin, self.ymax)
-            newt = ps.orientation.w - .9*delTheta
+            newt = ps.orientation.w - delTheta
             ps = Pose(Point(newx, newy, self.safeZ), Quaternion(1,0,0,newt))
             self.baxter.setEndPose(ps)
 
     # Performs the sequence of actions required to accomplish HW5 CV objectives.
     def execute(self):
         self.scanForBowl()
+        self.controlToObject('bowl')
         self.scanForBlock()
-        bPose = self.controlToBlock()
+        bPose = self.controlToObject('block')
         bPose.position.z = self.tableZ
         self.pickPlace(bPose, self.destination)
         rospy.loginfo('All done!')
