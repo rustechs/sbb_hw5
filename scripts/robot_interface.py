@@ -4,13 +4,14 @@
     Robot Interface node for HW5.
 
     It has been altered since HW3 to use MoveIt.
-    This simplifies things quite a bit.
-    For example, we no longer zero; we use the global frame.
-    We're also much less interested in doing IK stuff.
+    NOPE, JUST KIDDING - MoveIt doesn't work, so we're using the old
+    baxter_interface tools. Perhaps with some speed tweaks.
 '''
 
-import sys, rospy
-import baxter_interface
+import sargparse, sys, rospy, cv2, cv_bridge
+import baxter_interface, rospkg
+
+from sbb_hw5.msg import *
 
 from moveit_commander import MoveGroupCommander
 from moveit_commander import RobotCommander
@@ -35,13 +36,11 @@ class Baxter():
         
         # Give him a creative name
         self.name = baxter_name
-
-        # self.enable() # Probably should be called manually
         
-        # Create a moveit group for each arm
-        self.lg = MoveGroupCommander("left_arm")
-        self.rg = MoveGroupCommander("right_arm")
-        g.set_planner_id('RRTConnectkConfigDefault')
+        # Create baxter arm instances
+        self.right_arm = baxter_interface.Limb('right')
+        self.left_arm = baxter_interface.Limb('left')
+        self.BaxEnable = baxter_interface.RobotEnable()
 
         # Create baxter gripper instances
         if do_grippers:
@@ -53,6 +52,17 @@ class Baxter():
         # Create Baxter Hand Cameras
         self.rhc = baxter_interface.CameraController('right_hand_camera')
         self.lhc = baxter_interface.CameraController('left_hand_camera')
+
+        # Set up publishing to the face
+        rospack = rospkg.RosPack()
+        self.impath = rospack.get_path('bax_hw3') + '/img/'
+        self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=10)
+
+    def face(self, fname):
+        pass
+        img = cv2.imread(self.impath + fname + '.png')
+        msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
+        self.facepub.publish(msg)
 
     # Enable the robot
     # Must be manually called after instantiation 
@@ -228,20 +238,31 @@ class Baxter():
         else:
             rospy.logwarn('Incorrect limb string: %s' % limbSide)
 
+    # Method for calculating joint angles given a desired end-effector pose
+    def getIKGripper(self, limbSide, setPose):
+
+        # Prepare the request
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        ps = PoseStamped(header=hdr, pose=setPose,)
+        ikreq = SolvePositionIKRequest([ps], [], 0)
+
+        # Make the service call
+        srvName = 'ExternalTools/' + limbSide + '/PositionKinematicsNode/IKService'
+        srvAlias = rospy.ServiceProxy(srvName, SolvePositionIK)
+        rospy.wait_for_service(srvName)
+        resp = srvAlias(ikreq)
+
+        # Get IK response and convert to joint position dict
+        if (resp.isValid[0]):
+            return dict(zip(resp.joints[0].name, resp.joints[0].position))
+        else:
+            print("IK service: INVALID POSE - No Valid Joint Solution Found.")
+
     # Method for setting cartesian position of hand
     # setPose is a global pose
     def setEndPose(self, limbSide, setPose):
-        try:
-            if limbSide == 'left':
-                return self.lg.set_pose_target(setPose) 
-            elif limbSide == 'right':
-                return self.rg.set_pose_target(setPose)
-            else: 
-                raise
-        except:
-            rospy.logwarn('Invalid limb side name #: ' + limbSide)
-            raise
-
+        ik_joints = self.getIKGripper(limbSide, setPose)
+        self.setJoints(limbSide,ik_joints)
 
     # Camera Settings
     def setCamera(self, name, res=(960,600), fps=10):
