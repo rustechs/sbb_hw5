@@ -11,11 +11,6 @@
 import argparse, sys, rospy, cv2, cv_bridge
 import baxter_interface, rospkg
 
-from sbb_hw5.msg import *
-
-from moveit_commander import MoveGroupCommander
-from moveit_commander import RobotCommander
-
 from geometry_msgs.msg import Pose, Point, Quaternion, PoseStamped
 from std_msgs.msg import Header
 from baxter_core_msgs.srv import (
@@ -216,7 +211,7 @@ class Baxter():
     # Angular pose will always be top-down, so wrist-gripper displacement doesn't have to be factored in.
     # Returns the raw ('base') Pose if raw is set to True
     # Otherwise, returns pose relative to the origin zeroPose
-    def getEndPose(self,limbSide,raw=False):
+    def getEndPose(self,limbSide):
         
         # Conveniently call Baxter's endpoint_pose() methods
         try:
@@ -231,10 +226,7 @@ class Baxter():
             raise
 
         # From dict to Pose object
-        out = Pose(Point(*out['position']), Quaternion(*out['orientation']))
-        if not raw:
-            out = self.tfBaxterInv(out)
-        return  out
+        return Pose(Point(*out['position']), Quaternion(*out['orientation']))
 
     # Method for setting joint positions
     # Direct call to baxter_interface
