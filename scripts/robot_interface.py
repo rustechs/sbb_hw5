@@ -196,14 +196,15 @@ class Baxter():
             raise
     
     # Method for getting joint configuration
-    # Direct call to moveit
-    # Returns: list of floats
+    # Direct call to baxter_interface
+    # Returns: dict({str:float})
+    # unordered dict of joint name Keys to angle (rad) Values
     def getJoints(self, limbSide):
         try:
             if limbSide == 'left':
-                return self.lg.get_current_joint_values()
+                return self.left_arm.joint_angles()
             elif limbSide == 'right':
-                return self.rg.get_current_joint_values()
+                return self.right_arm.joint_angles()
             else:
                 raise
         except:
@@ -212,29 +213,36 @@ class Baxter():
 
 
     # Method for getting end-effector position
-    def getEndPose(self, limbSide):
+    # Angular pose will always be top-down, so wrist-gripper displacement doesn't have to be factored in.
+    # Returns the raw ('base') Pose if raw is set to True
+    # Otherwise, returns pose relative to the origin zeroPose
+    def getEndPose(self,limbSide,raw=False):
         
         # Conveniently call Baxter's endpoint_pose() methods
         try:
             if limbSide == 'left':
-                return self.lg.get_current_pose() 
+                out = self.left_arm.endpoint_pose() 
             elif limbSide == 'right':
-                return self.rg.get_current_pose()
+                out = self.right_arm.endpoint_pose()
             else: 
                 raise
         except:
             rospy.logwarn('Invalid limb side name #: ' + limbSide)
             raise
 
+        # From dict to Pose object
+        out = Pose(Point(*out['position']), Quaternion(*out['orientation']))
+        if not raw:
+            out = self.tfBaxterInv(out)
+        return  out
+
     # Method for setting joint positions
-    # Direct call to moveit, including go
+    # Direct call to baxter_interface
     def setJoints(self,limbSide,angles):
         if limbSide == 'left':
-            self.lg.set_joint_value_target(angles)
-            self.lg.go()
+            self.left_arm.move_to_joint_positions(angles)
         elif limbSide == 'right':
-            self.rg.set_joint_value_target(angles)
-            self.rg.go()
+            self.right_arm.move_to_joint_positions(angles)
         else:
             rospy.logwarn('Incorrect limb string: %s' % limbSide)
 
