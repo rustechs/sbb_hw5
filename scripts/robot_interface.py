@@ -273,18 +273,18 @@ class Baxter():
     # fps = frames per second
         try:
             if name == 'left':
-                self.lhc.open(self)
-                self.lhc.resolution(self, res)
-                self.lhc.fps(self, fps)
+                self.lhc.open()
+                self.lhc.resolution = res
+                self.lhc.fps = fps
                 # self.lhc.gain(self, gain)                  # Camera gain. 
                 # self.lhc.exposure(self, exposure)          # Camera Exposure. 
                 # self.lhc.white_balance_red(self, value)    # White balance red. 
                 # self.lhc.white_balance_green(self, value)  # White balance green. 
                 # self.lhc.white_balance_blue(self, value)   # White balance blue.             
             elif name == 'right':
-                self.rhc.open(self)
-                self.rhc.resolution(self, res)
-                self.rhc.fps(self, fps)
+                self.rhc.open()
+                self.rhc.resolution = res
+                self.rhc.fps = fps
             else:
                 raise
         except:
