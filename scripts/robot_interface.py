@@ -50,6 +50,10 @@ class Baxter():
             self.right_gripper.calibrate()
             self.left_gripper.calibrate()
 
+        # Create Baxter Hand Cameras
+        self.rhc = baxter_interface.CameraController('right_hand_camera')
+        self.lhc = baxter_interface.CameraController('left_hand_camera')
+
     # Enable the robot
     # Must be manually called after instantiation 
     def enable(self):
@@ -236,4 +240,30 @@ class Baxter():
                 raise
         except:
             rospy.logwarn('Invalid limb side name #: ' + limbSide)
+            raise
+
+
+    # Camera Settings
+    def setCamera(self, name, res=(960,600), fps=10):
+    # name = left, right
+    # res = [(1280, 800), (960, 600), (640, 400), (480, 300), (384, 240), (320, 200)]
+    # fps = frames per second
+        try:
+            if name == 'left':
+                self.lhc.open(self)
+                self.lhc.resolution(self, res)
+                self.lhc.fps(self, fps)
+                # self.lhc.gain(self, gain)                  # Camera gain. 
+                # self.lhc.exposure(self, exposure)          # Camera Exposure. 
+                # self.lhc.white_balance_red(self, value)    # White balance red. 
+                # self.lhc.white_balance_green(self, value)  # White balance green. 
+                # self.lhc.white_balance_blue(self, value)   # White balance blue.             
+            elif name == 'right':
+                self.rhc.open(self)
+                self.rhc.resolution(self, res)
+                self.rhc.fps(self, fps)
+            else:
+                raise
+        except:
+            rospy.logwarn('Invalid camera side name #: ' + name)
             raise
