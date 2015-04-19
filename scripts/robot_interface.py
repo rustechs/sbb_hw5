@@ -244,22 +244,24 @@ class Baxter():
 
 
     # Camera Settings
-    def camera(self, name, res, fps):
+    def setCamera(self, name, res, fps):
     # name = left, right
     # res = [(1280, 800), (960, 600), (640, 400), (480, 300), (384, 240), (320, 200)]
     # fps = frames per second
         try:
             if name == 'left':
-                self.lhc.unreachable.resolution(self, res)
-                self.lhc.unreachable.fps(self, fps)
-                # self.lhc.unreachable.gain(self, gain)                  # Camera gain. 
-                # self.lhc.unreachable.exposure(self, exposure)          # Camera Exposure. 
-                # self.lhc.unreachable.white_balance_red(self, value)    # White balance red. 
-                # self.lhc.unreachable.white_balance_green(self, value)  # White balance green. 
-                # self.lhc.unreachable.white_balance_blue(self, value)   # White balance blue.             
+                self.lhc.open(self)
+                self.lhc.resolution(self, res)
+                self.lhc.fps(self, fps)
+                # self.lhc.gain(self, gain)                  # Camera gain. 
+                # self.lhc.exposure(self, exposure)          # Camera Exposure. 
+                # self.lhc.white_balance_red(self, value)    # White balance red. 
+                # self.lhc.white_balance_green(self, value)  # White balance green. 
+                # self.lhc.white_balance_blue(self, value)   # White balance blue.             
             elif name == 'right':
-                self.rhc.unreachable.resolution(self, res)
-                self.rhc.unreachable.fps(self, fps)
+                self.lhc.open(self)
+                self.rhc.resolution(self, res)
+                self.rhc.fps(self, fps)
             else:
                 raise
         except:
