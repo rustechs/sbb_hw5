@@ -23,24 +23,25 @@ class Controller():
         # Hard-coded settings for initial pose and table location
         rospy.loginfo('Initializing controller')
         self.tableZ = -.07
-        self.scanZ = .2
-        self.safeZ = .1
+        self.scanZ = .3
+        self.safeZ = .08
         self.pixTol = 10
         self.thetaTol = .3
         self.bowlD = .15
-        self.controlGain = .001/(self.safeZ-self.tableZ)
+
+        # Control gain includes the pixel to m conversion factor
+        # At z = .08 (table distance .15), pixels = 78, m = .044
+        # So multiply by .0013 to get m, then call gain ~ .8
+        self.controlGain = .0013 * .8 * (self.safeZ - self.tableZ)/.15
         self.xmin = .3
         self.ymin = -.6
         self.xmax = .8
         self.ymax = -.1
+
+        # Convient poses, orientations, etc
         self.downwards = Quaternion(1, 0, 0, 0)
         self.home = Pose(Point(.5, -.5, self.scanZ), self.downwards)
         self.destination = Pose(Point(.5, 0, self.tableZ), self.downwards)
-
-        # Initialize progress trackers
-        self.foundBowl = False
-        self.foundBlock = False
-        self.done = False
 
         # initialize the Baxter object
         # Note that Baxter should be using his right arm
