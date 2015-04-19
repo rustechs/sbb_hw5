@@ -24,20 +24,20 @@ def main(img_path):
     cv2.destroyAllWindows()
     
     # Convert to HSV
-    img = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
+    imgHVT = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
         
     # Get image size
-    h,w,d = img.shape
+    h,w,d = imgHVT.shape
     print 'Image Dimensions: (' + str(h) + ',' + str(w) + ')' 
 
     # Image center
-    center = (h/2,w/2)
+    center = (int(h/2),int(w/2))
 
     # Threshold only the color we want
-    MIN = np.array([95,50,50])
-    MAX = np.array([130,255,255])
+    MIN = np.array([25,60,10])
+    MAX = np.array([85,255,255])
 
-    imgThresh = cv2.inRange(img, MIN, MAX)
+    imgThresh = cv2.inRange(imgHVT, MIN, MAX)
         
     cv2.imshow('Threshold Image',imgThresh)
     cv2.waitKey()
@@ -45,8 +45,15 @@ def main(img_path):
      
     # Find centroid with zeroth order moment
     m = cv2.moments(imgThresh)
-    centroid = (m['m10']/m['m00'], m['m01']/m['m00']) 
+    centroid = (int(m['m10']/m['m00']), int(m['m01']/m['m00'])) 
     print 'Object centroid at: ' + str(centroid)
+
+    # Show image with centroid overlay
+    img
+    cv2.circle(img,centroid,5,(120,255,255),-1)  
+    cv2.imshow('Threshold Image w/ Centroid',img)
+    cv2.waitKey()
+    cv2.destroyAllWindows()
 
     # Print the x,y delta distances
     delta = tuple(np.subtract(centroid,center))
