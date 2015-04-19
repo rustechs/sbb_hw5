@@ -48,13 +48,15 @@ class Baxter():
         self.rhc = baxter_interface.CameraController('right_hand_camera')
         self.lhc = baxter_interface.CameraController('left_hand_camera')
 
+        # Initialize camera (right only for now)
+        self.setCamera('right')
+
         # Set up publishing to the face
         rospack = rospkg.RosPack()
         self.impath = rospack.get_path('sbb_hw5') + '/img/'
         self.facepub = rospy.Publisher('/robot/xdisplay', Image, latch=True, queue_size=10)
 
     def face(self, fname):
-        pass
         img = cv2.imread(self.impath + fname + '.png')
         msg = cv_bridge.CvBridge().cv2_to_imgmsg(img, encoding="bgr8")
         self.facepub.publish(msg)
@@ -265,7 +267,7 @@ class Baxter():
         self.setJoints(limbSide,ik_joints)
 
     # Camera Settings
-    def setCamera(self, name, res=(960,600), fps=10):
+    def setCamera(self, name, res=(640,400), fps=10):
     # name = left, right
     # res = [(1280, 800), (960, 600), (640, 400), (480, 300), (384, 240), (320, 200)]
     # fps = frames per second

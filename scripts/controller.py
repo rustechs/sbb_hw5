@@ -10,6 +10,7 @@
 '''
 
 import rospy, robot_interface
+from random import random
 from sbb_hw5.srv import *
 from geometry_msgs.msg import Point, Quaternion, Pose
 
@@ -24,6 +25,14 @@ class Controller():
         self.tableZ = -.07
         self.scanZ = .2
         self.safeZ = .1
+        self.pixTol = 10
+        self.thetaTol = .3
+        self.bowlD = .15
+        self.controlGain = .001/(self.safeZ-self.tableZ)
+        self.xmin = .3
+        self.ymin = -.6
+        self.xmax = .8
+        self.ymax = -.1
         self.downwards = Quaternion(1, 0, 0, 0)
         self.home = Pose(Point(.5, -.5, self.scanZ), self.downwards)
         self.destination = Pose(Point(.5, 0, self.tableZ), self.downwards)
@@ -87,57 +96,88 @@ class Controller():
         # Finish place and back off to safe height
         self.baxter.openGrip('right')
         self.baxter.setEndPose('right', ps)
+        rospy.loginfo('Pick/place complete.')
 
 
-    # Function that takes action depending on the state of the workspace.
-    # Coordination of arms happens external to this; high-level only.
-    def planMove(self):
+    # This function attempts to put the end effector within sight of the bowl centroid.
+    # If the current end pose does not accomplish this, it moves to a random pose in the 
+    # search plane, and checks again - repeating until it is successful.
+    # Never. Give. Up. Timeouts are for wimps.
+    def scanForBowl(self):
+        rospy.loginfo('Scanning for bowl...')
+        while True:
+            bowl = self.getBowl()
+            if bowl.found:
+                rospy.loginfo('Bowl found.')
+                return bowl
+            else:
+                xpos = self.xmin + (self.xmax - self.xmin)*random()
+                ypos = self.ymin + (self.ymax - self.ymin)*random()
+                ps = Pose(Point(xpos, ypos, self.scanZ), self.downwards)
+                self.baxter.setEndPose('right', ps)
 
-        # Start planning out move right away.
+    # Same as scanForBowl, except that the range of motion is restricted to the bowl's
+    # diameter, about the initial point. Checks for exceeding xmin/xmax are implemented.
+    def scanForBlock(self):
+        rospy.loginfo('Scanning for block...')
+        start = self.baxter.getEndPose('right')
+        while True:
+            block = self.getBlock()
+            if block.found:
+                rospy.loginfo('Block found.')
+                return block
+            else:
+                xpos = start.position.x + self.bowlD*(random() - .5)
+                ypos = start.position.y + self.bowlD*(random() - .5)
+                ps = Pose(Point(xpos, ypos, self.scanZ), self.downwards)
+                self.baxter.setEndPose('right', ps)
 
-        # If the stack order matches the objective, express victory
-        if not (None in [slot.contains for slot in self.stack]):
-            order = [slot.contains.n for slot in self.stack]
-            if order == self.objective:
-                rospy.loginfo('Objective achieved.')
-                self.baxter.face('happy')
-                self.done = True
-                return
+    # This function must be run only when we are reliably in range of the block.
+    # It performs choppy closed-loop semi-proportional control of the end effector
+    # until it is aligned and directly over the block.
+    def controlToBlock(self):
 
-        # If it is not done, travel up the stack looking for the first stack
-        # slot that either contains the wrong block or is empty.
-        for i, slot in list(enumerate(self.stack)):
+        rospy.loginfo('Controlling to block center...')
 
-            rightBlock = self.blocks[self.objective[i]]
+        # Some setup: convenience function, limits, initial conditions
+        clamp = lambda n, minn, maxn: max(min(maxn, n), minn)
+        delTheta = 1000
+        delY = 1000
+        delX = 1000
+        ps = self.baxter.getEndPose('right')
+        ps.position.z = self.safeZ
+        self.baxter.setEndPose('right', ps)
 
-            # If the slot is empty, place the block that belongs there.
-            if slot.isEmpty():
-                self.pickPlace(rightBlock, slot)
-                return
+        # Control loop. Never. Give. Up.
+        while True:
+            ps = self.baxter.getEndPose('right')
+            block = self.getBlock()
+            delTheta = block.t
+            delY = block.y
+            delX = block.x
+            if (delTheta > self.thetaTol) or (delY > self.pixTol) or (delX > self.pixTol):
+                return ps
+            newx = clamp(ps.position.x - (delX * self.controlGain), self.xmin, self.xmax)
+            newy = clamp(ps.position.y - (delY * self.controlGain), self.ymin, self.ymax)
+            newt = ps.orientation.w - .9*delTheta
+            ps = Pose(Point(newx, newy, self.safeZ), Quaternion(1,0,0,newt))
+            self.baxter.setEndPose(ps)
 
-            # If the slot contains the wrong block, take the top of the stack # off and place it on an available table slot.
-            if not (slot.contains is rightBlock):
-                nums = [self.stack[j].contains for j in range(self.nBlocks)]
-                try:
-                    indn = nums.index(None) - 1
-                except:
-                    indn = len(nums) - 1
-                removeBlock = self.stack[indn].contains
-                self.pickPlace(removeBlock, 'table')
-                return
-
-        rospy.loginfo('Planning could not find something to do ...?')
+    # Performs the sequence of actions required to accomplish HW5 CV objectives.
+    def execute(self):
+        self.scanForBowl()
+        self.scanForBlock()
+        bPose = self.controlToBlock()
+        bPose.position.z = self.tableZ
+        self.pickPlace(bPose, self.destination)
+        rospy.loginfo('All done!')
 
 # This is what runs when the script is executed externally.
 # It runs the main node function, and catches exceptions.
 if __name__ == '__main__':
     try:
         controller = Controller()
-        while True:
-            time.sleep(1)
-            if not controller.done:
-                controller.planMove();
-                
+        controller.execute()
     except:
         import pdb, traceback, sys
         type, value, tb = sys.exc_info()
