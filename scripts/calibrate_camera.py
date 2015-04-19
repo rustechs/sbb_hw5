@@ -43,6 +43,7 @@ def main(img_path):
     MAX = np.array([140,160,160])
 
     imgThresh = cv2.inRange(imgHSV, MIN, MAX)
+    # output = cv2.bitwise_and(image, image, mask = mask)
         
     cv2.imshow('Threshold Image',imgThresh)
     cv2.waitKey()
@@ -64,6 +65,35 @@ def main(img_path):
     delta = tuple(np.subtract(centroid,center))
 
     print 'Object centroid delta from center: ' + str(delta)
+
+
+
+    #<--- Harris Corner Detector --->
+    # Create grayscale image used for Harris detection
+    grayImage = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Compute Harris Corner Scores
+    grayImage = np.float32(grayImage)
+    dst = cv2.cornerHarris(grayImage,8,10,0.04)
+
+    #Find Max 4 corners
+    blockCorners = np.zeros((4, 2))
+    for i in range(4)
+    # Assumes dst is an 2D array
+        maxHarris = dst.argmax(axis=0)
+
+        # maxHarris = np.argmax(dst)
+        # maxHarris = np.array([np.floor(np.divide(maxHarris,w)),np.remainder(maxHarris,w)])
+
+        blockCorners[i,:] = maxHarris[0:2]
+        dst[maxHarris[0],maxHarris[1]] = np.amin(dst)
+
+    # cv2.imshow('dst',dst)
+
+    # Find COM and Orientation
+    blockCOM = np.mean(blockCorners, axis=0)
+
+
 
 if __name__ == '__main__':
 
