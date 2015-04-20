@@ -7,6 +7,7 @@ import numpy as np
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
 from sbb_hw5.srv import *
+
 import tesseract
 
 class locate_stuff():
@@ -17,17 +18,16 @@ class locate_stuff():
         # Provide a service to return newest bowl/block pose
         self.img_serv = rospy.Service('find_stuff',FindStuffSrv,self.servCall)
         # Publish overlayed image
-        self.img_pub = rospy.Publisher('/cv/bowl_block',Image,queue_size=10)
-        # self.img_pub = rospy.Publisher('/robot/xdisplay',Image,queue_size=10)
+        # self.img_pub = rospy.Publisher('/cv/bowl_block',Image,queue_size=10)
+        self.img_pub = rospy.Publisher('/robot/xdisplay',Image,queue_size=10)
         # Create a image conversion bridge
         self.br = CvBridge()
         self.blockLoc = (False,0,0,0)
         self.bowlLoc = (False,0,0,0)
         self.center = (0,0)
-        self.theRealTheta = 0
         self.ocrAPI = tesseract.TessBaseAPI()
         self.ocrAPI.Init(".","eng",tesseract.OEM_DEFAULT)
-		self.ocrAPI.SetPageSegMode(tesseract.PSM_AUTO)
+        self.ocrAPI.SetPageSegMode(tesseract.PSM_AUTO)
 
     # Camera frame topic callback
     # Find bowl and block on each frame refresh
@@ -89,8 +89,6 @@ class locate_stuff():
             # print 'pt1 is looks like ... '  + str(pt1)
             # print 'pt2 is looks like ... '  + str(pt2)
             cv2.line(imgShow,tuple(np.int_(pt1)),tuple(np.int_(pt2)),(0,165,200),1)
-            pt21 = pt2-pt1
-            self.theRealTheta = np.arctan2(pt21[1],pt21[0])
             # cv2.circle(imgShow,tuple(self.box[0]),4,(240,50,30),-1)
             # cv2.circle(imgShow,tuple(self.box[2]),4,(240,50,30),-1)
             # cv2.circle(imgShow,tuple(self.box[1]),4,(30,50,240),-1)
@@ -184,7 +182,7 @@ class locate_stuff():
             self.box = cv2.cv.BoxPoints(rect)
             self.box = np.int0(self.box)
             
-            print(self.box)
+            # print(self.box)
 
             x,y = rect[0]
            
@@ -193,9 +191,11 @@ class locate_stuff():
             x = int(x)
             y = int(y)
 
+            pt21 = self.box[0]-self.box[1]
+            t = (np.arctan2(pt21[1],pt21[0])) % (np.pi/2)
+
             dx = x - self.center[0]
             dy = self.center[1] - y
-            t = self.theRealTheta
             return (True,dx,dy,t)
         else:
             return (False,0,0,0)
@@ -205,8 +205,8 @@ class locate_stuff():
     def OCR(self):
     	
     	tesseract.SetCvImage(self.img,self.ocrAPI)
-		text=self.ocrAPI.GetUTF8Text()
-		print 'Block number is ' + str(text)
+     	text=self.ocrAPI.GetUTF8Text()
+     	print 'Block number is ' + str(text)
         
 
 # Main loop
