@@ -212,15 +212,21 @@ class locate_stuff():
            
             self.rectW,self.rectH = rect[1]
 
-            x = int(x)
-            y = int(y)
+            maxSide = 100
+            if (self.rectW <= maxSide or self.rectH <= maxSide):
 
-            pt21 = self.box[0]-self.box[1]
-            t = (np.arctan2(pt21[1],pt21[0])) % (np.pi/2)
+                x = int(x)
+                y = int(y)
 
-            dx = x - self.center[0]
-            dy = self.center[1] - y
-            return (True,dx,dy,t)
+                pt21 = self.box[0]-self.box[1]
+                t = (np.arctan2(pt21[1],pt21[0])) % (np.pi/2)
+
+                dx = x - self.center[0]
+                dy = self.center[1] - y
+                return (True,dx,dy,t)
+                
+            else:
+                return (False,0,0,0)
         else:
             return (False,0,0,0)
 
