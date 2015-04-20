@@ -213,7 +213,7 @@ class locate_stuff():
             self.rectW,self.rectH = rect[1]
 
             maxSide = 100
-            if (self.rectW <= maxSide or self.rectH <= maxSide or abs(self.rectW-self.rectH) <= 10):
+            if (self.rectW <= maxSide and self.rectH <= maxSide and abs(self.rectW-self.rectH) <= 10):
 
                 x = int(x)
                 y = int(y)
