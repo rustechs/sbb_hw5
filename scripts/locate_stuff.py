@@ -18,16 +18,21 @@ class locate_stuff():
         # Listen to camera image topic
         self.img_sub = rospy.Subscriber('cameras/right_hand_camera/image',Image,self.parseFrame)
         # self.img_sub = rospy.Subscriber('cameras/left_hand_camera/image',Image,self.parseFrame)
+
         # Provide a service to return newest bowl/block pose
         self.img_serv = rospy.Service('find_stuff',FindStuffSrv,self.servCall)
+
         # Publish overlayed image
         # self.img_pub = rospy.Publisher('/cv/bowl_block',Image,queue_size=10)
         self.img_pub = rospy.Publisher('/robot/xdisplay',Image,queue_size=10)
+
         # Create a image conversion bridge
         self.br = CvBridge()
         self.blockLoc = (False,0,0,0)
         self.bowlLoc = (False,0,0,0)
         self.center = (0,0)
+
+        # Initialize OCR API
         # self.ocrAPI = tesseract.TessBaseAPI()
         # self.ocrAPI.Init("/usr/share/tesseract-ocr/","eng",tesseract.OEM_DEFAULT)
         # self.ocrAPI.SetPageSegMode(tesseract.PSM_SINGLE_CHAR)
@@ -61,6 +66,7 @@ class locate_stuff():
         # Publish a pretty picture of what we found
         self.pubOverlayImg()
 
+    # Publish Scanning Status 
     def pubOverlayImg(self):
    
         # Show unmasked img
@@ -93,35 +99,32 @@ class locate_stuff():
         # Plot a center line
         cv2.line(imgShow,(self.center[0],0),(self.center[0],self.img.shape[0]),(30,30,240),1)
 
-        # If block was found, show it
+        # <--- If block was found, show it --->
         if self.blockLoc[0]:
             bX = self.blockLoc[1]+self.center[0]
             bY = self.center[1]-self.blockLoc[2]
-            bT = self.blockLoc[3]
             bW = self.rectW
-            cv2.circle(imgShow,(bX,bY),5,(240,50,30),-1)            
+
+            #Show COM
+            cv2.circle(imgShow,(bX,bY),5,(240,50,30),-1)
+
+            #Show minimum fitted rectangle contour        
             cv2.drawContours(imgShow,[self.box],0,(0,165,200),2)
-            #cv2.line(imgShow,tuple(np.int_((bX-bW*np.cos(bT),bY-bW*np.sin(bT)))),tuple(np.int_((bX+bW*np.cos(bT),bY+bW*np.sin(bT)))),(0,165,200),1)
-            #cv2.line(imgShow,tuple(np.int_((bX-bW*np.cos(bT+np.pi/2),bY-bW*n(0,165,200),1p.sin(bT+np.pi/2)))),tuple(np.int_((bX+bW*np.cos(bT+np.pi/2),bY+bW*np.sin(bT+np.pi/2)))),(0,165,200),1)
             
+            #Show contour orientation
             pt1 = [bX,bY]
-            pt2 = pt1 + (self.box[0] - self.box[1])
-            # print 'pt1 is looks like ... '  + str(pt1)
-            # print 'pt2 is looks like ... '  + str(pt2)
+            pt2 = pt1 + (self.box[0] - self.box[1])  # Box vertices is arranged in order, so this is line is vevctor of an edge
             cv2.line(imgShow,tuple(np.int_(pt1)),tuple(np.int_(pt2)),(0,165,200),1)
-            # cv2.circle(imgShow,tuple(self.box[0]),4,(240,50,30),-1)
-            # cv2.circle(imgShow,tuple(self.box[2]),4,(240,50,30),-1)
-            # cv2.circle(imgShow,tuple(self.box[1]),4,(30,50,240),-1)
-            # cv2.circle(imgShow,tuple(self.box[3]),4,(30,50,240),-1)
             blockStr = 'Block: ' + str(self.blockLoc)
             cv2.putText(imgShow,blockStr,(5,60),font,1,(255,255,255),1,cv2.CV_AA)
-        # If bowl was found, show it
+
+        # <--- If bowl was found, show it --->
         if self.bowlLoc[0]:
             cv2.circle(imgShow,(self.bowlLoc[1]+self.center[0],self.center[1]-self.bowlLoc[2]),5,(30,240,30),-1)
             bowlStr = 'Bowl: ' + str(self.bowlLoc)
             cv2.putText(imgShow,bowlStr,(5,30),font,1,(255,255,255),1,cv2.CV_AA)
         
-        # Publish image
+        # <--- Publish image --->
         self.img_pub.publish(self.br.cv2_to_imgmsg(cv2.resize(imgShow,(1024,600)), "bgr8"))
             
     # Deal with service call by parsing argument, returning latest location for item
@@ -177,18 +180,15 @@ class locate_stuff():
         self.imgThreshBlock[:topW,:] = 0
         self.imgThreshBlock[botW:,:] = 0
 
-        # Check if there's enough green pixels to constitute a block
+        # <--- Check if there's enough blue pixels to constitute a block --->
         if float(cv2.countNonZero(self.imgThreshBlock))/(self.img.shape[0]*self.img.shape[1]) >= 0.01:
-            # m = cv2.moments(self.imgThreshBlock)
             # print "I see a block"
-            # dx = x - self.center[0]
-            # dy = self.center[1] - y
             
-            # Find the right contour
+            # <--- Find the right contour index for our block --->
             c,h = cv2.findContours(self.imgThreshBlock,1,2)
             
-            # print c
-            
+            # <--- Search for contours with max area --->
+            # (This procedure only excecutes when camera is close enough to the block)
             maxcArea = 0
             for i in range(len(c)):
                  cAreas = cv2.contourArea(c[i])
@@ -196,22 +196,18 @@ class locate_stuff():
                     maxcArea = cAreas
                     indexcArea = i
               
-            cnt = c[indexcArea]
-
-            rect = cv2.minAreaRect(cnt)
+            cnt = c[indexcArea]         # Contour with min area
+            rect = cv2.minAreaRect(cnt) # Minimum Fitted Rectangle, [(x,y),(w,h),(theta)]
            
-            self.box = cv2.cv.BoxPoints(rect)
+            self.box = cv2.cv.BoxPoints(rect) #Converting rectangle Box2D type into array of vertices
             self.box = np.int0(self.box)
 
             # Do OCR
             # self.OCR()
             
-            # print(self.box)
-
+            # <--- Final quality check of "squareness" --->
             x,y = rect[0]
-           
             self.rectW,self.rectH = rect[1]
-
             maxSide = 100
             if (self.rectW <= maxSide and self.rectH <= maxSide and abs(self.rectW-self.rectH) <= 10):
 
