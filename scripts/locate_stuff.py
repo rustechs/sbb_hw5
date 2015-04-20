@@ -10,7 +10,7 @@ from sensor_msgs.msg import Image
 from sbb_hw5.srv import *
 import string
 
-import tesseract
+# import tesseract
 
 class locate_stuff():
 
@@ -28,11 +28,11 @@ class locate_stuff():
         self.blockLoc = (False,0,0,0)
         self.bowlLoc = (False,0,0,0)
         self.center = (0,0)
-        self.ocrAPI = tesseract.TessBaseAPI()
-        self.ocrAPI.Init("/usr/share/tesseract-ocr/","eng",tesseract.OEM_DEFAULT)
-        self.ocrAPI.SetPageSegMode(tesseract.PSM_SINGLE_CHAR)
-        self.ocrAPI.SetVariable("tessedit_pageseg_mode", "7")
-       	self.ocrAPI.SetVariable("tessedit_char_whitelist", "0123456789")
+        # self.ocrAPI = tesseract.TessBaseAPI()
+        # self.ocrAPI.Init("/usr/share/tesseract-ocr/","eng",tesseract.OEM_DEFAULT)
+        # self.ocrAPI.SetPageSegMode(tesseract.PSM_SINGLE_CHAR)
+        # self.ocrAPI.SetVariable("tessedit_pageseg_mode", "7")
+       	# self.ocrAPI.SetVariable("tessedit_char_whitelist", "0123456789")
         self.lastBlock = None
 
     # Camera frame topic callback
@@ -226,40 +226,40 @@ class locate_stuff():
 
 
     # Recognise numbers on block
-    def OCR(self):
+    # def OCR(self):
     	# import pdb; pdb.set_trace()
 
     	# Convert to openCV 1 image type
-    	hT,wT,cT = self.img.shape
+    	# hT,wT,cT = self.img.shape
 
     	# Generate box threshold
-    	imgBlockMask = np.zeros((hT,wT,3), np.uint8)
+    	# imgBlockMask = np.zeros((hT,wT,3), np.uint8)
 
-    	cv2.drawContours(imgBlockMask,[self.box],0,(255,255,255),-1)
+    	# cv2.drawContours(imgBlockMask,[self.box],0,(255,255,255),-1)
 
-    	imgBlockMask = cv2.cvtColor(imgBlockMask,cv2.COLOR_BGR2GRAY)
-    	r,imgBlockMask = cv2.threshold(imgBlockMask,128,255,cv2.THRESH_BINARY)
+    	# imgBlockMask = cv2.cvtColor(imgBlockMask,cv2.COLOR_BGR2GRAY)
+    	# r,imgBlockMask = cv2.threshold(imgBlockMask,128,255,cv2.THRESH_BINARY)
 
-    	imgOCRBlock = cv2.bitwise_and(self.img,self.img,mask = imgBlockMask)
+    	# imgOCRBlock = cv2.bitwise_and(self.img,self.img,mask = imgBlockMask)
 
-    	imgOCRBlock = cv2.cvtColor(imgOCRBlock,cv2.COLOR_BGR2GRAY)
+    	# imgOCRBlock = cv2.cvtColor(imgOCRBlock,cv2.COLOR_BGR2GRAY)
     	# imgOCRNumMask = cv2.adaptiveThreshold(imgOCRBlock,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,3,5)
-    	r,imgOCRNumMask = cv2.threshold(imgOCRBlock,50,255,cv2.THRESH_BINARY)
+    	# r,imgOCRNumMask = cv2.threshold(imgOCRBlock,50,255,cv2.THRESH_BINARY)
 
-    	imgOCR = cv2.bitwise_and(imgOCRBlock,imgOCRBlock,mask = imgOCRNumMask)
+    	# imgOCR = cv2.bitwise_and(imgOCRBlock,imgOCRBlock,mask = imgOCRNumMask)
 
     	# Show the OCR threshold image
-    	cv2.imshow('Threshold Image',imgOCR)
-    	cv2.waitKey(5)
+    	# cv2.imshow('Threshold Image',imgOCR)
+    	# cv2.waitKey(5)
 
-    	ocrImg = cv.CreateImageHeader((wT,hT), cv.IPL_DEPTH_8U, cT)
-    	cv.SetData(ocrImg,imgOCR.tostring(),imgOCR.dtype.itemsize * cT * (wT))
-    	tesseract.SetCvImage(ocrImg,self.ocrAPI)
+    	# ocrImg = cv.CreateImageHeader((wT,hT), cv.IPL_DEPTH_8U, cT)
+    	# cv.SetData(ocrImg,imgOCR.tostring(),imgOCR.dtype.itemsize * cT * (wT))
+    	# tesseract.SetCvImage(ocrImg,self.ocrAPI)
 
     	# Try to find some numbers
-     	self.lastBlock=self.ocrAPI.GetUTF8Text()
-     	self.lastBlock.strip(string.whitespace).replace("\n", "")
-     	print 'Block number is: ' + self.lastBlock
+     	# self.lastBlock=self.ocrAPI.GetUTF8Text()
+     	# self.lastBlock.strip(string.whitespace).replace("\n", "")
+     	# print 'Block number is: ' + self.lastBlock
         
  
 # Main loop
