@@ -161,7 +161,7 @@ class locate_stuff():
     def findBlock(self):
         # Blue Color 
         MIN = np.array([90,30,15])
-        MAX = np.array([135,115,100])
+        MAX = np.array([140,115,130])
 
         # Color threshold
         self.imgThreshBlock = cv2.inRange(self.imgHSV,MIN,MAX)
