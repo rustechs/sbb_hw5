@@ -286,28 +286,16 @@ class Baxter():
             z = ps.position.z
         if o is None:
             o = ps.orientation
-        self.setEndPose(limbSide, Point(x, y, z), o)
-
-    def setEndOrientation(self, limbSide, o):
-        ps = self.getEndPose(limbSide)
-        ps.orientation = o
-        self.setEndPose(limbSide, ps)
+        self.setEndPose(limbSide, Pose(Point(x, y, z), o))
 
     # Camera Settings
-    def setCamera(self, name, res=(640,400), fps=10):
-    # name = left, right
     # res = [(1280, 800), (960, 600), (640, 400), (480, 300), (384, 240), (320, 200)]
-    # fps = frames per second
+    def setCamera(self, name, res=(640,400), fps=10):
         try:
             if name == 'left':
                 self.lhc.open()
                 self.lhc.resolution = res
-                self.lhc.fps = fps
-                # self.lhc.gain(self, gain)                  # Camera gain. 
-                # self.lhc.exposure(self, exposure)          # Camera Exposure. 
-                # self.lhc.white_balance_red(self, value)    # White balance red. 
-                # self.lhc.white_balance_green(self, value)  # White balance green. 
-                # self.lhc.white_balance_blue(self, value)   # White balance blue.             
+                self.lhc.fps = fps            
             elif name == 'right':
                 self.rhc.open()
                 self.rhc.resolution = res

@@ -8,5 +8,6 @@ Note that although this launch file launches multiple nodes, it only executes th
 -->
 
 <launch>
+  <node name="$(anon find_stuff)" pkg="sbb_hw5" type="locate_stuff.py" output="screen"/>
   <node name="$(anon control)" pkg="sbb_hw5" type="controller.py" output="screen"/>
 </launch>
