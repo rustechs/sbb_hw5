@@ -161,7 +161,7 @@ class locate_stuff():
     def findBlock(self):
         # Blue Color 
         MIN = np.array([90,30,15])
-        MAX = np.array([140,115,130])
+        MAX = np.array([135,115,100])
 
         # Color threshold
         self.imgThreshBlock = cv2.inRange(self.imgHSV,MIN,MAX)
@@ -178,7 +178,7 @@ class locate_stuff():
         self.imgThreshBlock[botW:,:] = 0
 
         # Check if there's enough green pixels to constitute a block
-        if float(cv2.countNonZero(self.imgThreshBlock))/(self.img.shape[0]*self.img.shape[1]) >= 0.015:
+        if float(cv2.countNonZero(self.imgThreshBlock))/(self.img.shape[0]*self.img.shape[1]) >= 0.01:
             # m = cv2.moments(self.imgThreshBlock)
             # print "I see a block"
             # dx = x - self.center[0]
