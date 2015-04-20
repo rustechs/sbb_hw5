@@ -3,10 +3,12 @@
 import sys
 import rospy
 import cv2
+import cv2.cv as cv
 import numpy as np
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
 from sbb_hw5.srv import *
+import string
 
 import tesseract
 
@@ -15,6 +17,7 @@ class locate_stuff():
     def __init__(self):
         # Listen to camera image topic
         self.img_sub = rospy.Subscriber('cameras/right_hand_camera/image',Image,self.parseFrame)
+        # self.img_sub = rospy.Subscriber('cameras/left_hand_camera/image',Image,self.parseFrame)
         # Provide a service to return newest bowl/block pose
         self.img_serv = rospy.Service('find_stuff',FindStuffSrv,self.servCall)
         # Publish overlayed image
@@ -26,8 +29,11 @@ class locate_stuff():
         self.bowlLoc = (False,0,0,0)
         self.center = (0,0)
         self.ocrAPI = tesseract.TessBaseAPI()
-        self.ocrAPI.Init(".","eng",tesseract.OEM_DEFAULT)
-        self.ocrAPI.SetPageSegMode(tesseract.PSM_AUTO)
+        self.ocrAPI.Init("/usr/share/tesseract-ocr/","eng",tesseract.OEM_DEFAULT)
+        self.ocrAPI.SetPageSegMode(tesseract.PSM_SINGLE_CHAR)
+        self.ocrAPI.SetVariable("tessedit_pageseg_mode", "7")
+       	self.ocrAPI.SetVariable("tessedit_char_whitelist", "0123456789")
+        self.lastBlock = None
 
     # Camera frame topic callback
     # Find bowl and block on each frame refresh
@@ -49,8 +55,8 @@ class locate_stuff():
         self.blockLoc = self.findBlock()
         self.bowlLoc = self.findBowl()
        
-        rospy.loginfo("Bowl Location: %s" % str(self.bowlLoc))
-        rospy.loginfo("Block Location: %s" % str(self.blockLoc))
+        #rospy.loginfo("Bowl Location: %s" % str(self.bowlLoc))
+        #rospy.loginfo("Block Location: %s" % str(self.blockLoc))
 
         # Publish a pretty picture of what we found
         self.pubOverlayImg()
@@ -60,11 +66,25 @@ class locate_stuff():
         # Show unmasked img
         # imgShow = img
 
+        # Save image size
+        hT,wT,cT = self.img.shape
+        
+        # Set up font for text
+        font = cv2.FONT_HERSHEY_COMPLEX_SMALL
+
         # Create masked image for bowl
         imgShowBowl = cv2.bitwise_and(self.img,self.img,mask = self.imgThreshBowl)
 
         # Add block to masked image
-        imgShowBlock = cv2.bitwise_and(self.img,self.img,mask = self.imgThreshBlock)
+        # Generate box threshold
+    	imgShowBlock = np.zeros((hT,wT,3), np.uint8)
+
+    	if self.blockLoc[0]:
+    		cv2.drawContours(imgShowBlock,[self.box],0,(255,255,255),-1)
+
+    	imgShowBlock = cv2.cvtColor(imgShowBlock,cv2.COLOR_BGR2GRAY)
+    	retval,imgShowBlock = cv2.threshold(imgShowBlock,128,255,cv2.THRESH_BINARY)
+        imgShowBlock = cv2.bitwise_and(self.img,self.img,mask = imgShowBlock)
         imgShow = cv2.bitwise_or(imgShowBowl,imgShowBlock)
 
         # Plot the center
@@ -93,9 +113,13 @@ class locate_stuff():
             # cv2.circle(imgShow,tuple(self.box[2]),4,(240,50,30),-1)
             # cv2.circle(imgShow,tuple(self.box[1]),4,(30,50,240),-1)
             # cv2.circle(imgShow,tuple(self.box[3]),4,(30,50,240),-1)
+            blockStr = 'Block: ' + str(self.blockLoc)
+            cv2.putText(imgShow,blockStr,(5,60),font,1,(255,255,255),1,cv2.CV_AA)
         # If bowl was found, show it
         if self.bowlLoc[0]:
             cv2.circle(imgShow,(self.bowlLoc[1]+self.center[0],self.center[1]-self.bowlLoc[2]),5,(30,240,30),-1)
+            bowlStr = 'Bowl: ' + str(self.bowlLoc)
+            cv2.putText(imgShow,bowlStr,(5,30),font,1,(255,255,255),1,cv2.CV_AA)
         
         # Publish image
         self.img_pub.publish(self.br.cv2_to_imgmsg(cv2.resize(imgShow,(1024,600)), "bgr8"))
@@ -136,8 +160,8 @@ class locate_stuff():
     # Returns tuple (found,x,y,t)
     def findBlock(self):
         # Blue Color 
-        MIN = np.array([90,30,10])
-        MAX = np.array([140,160,115])
+        MIN = np.array([90,30,15])
+        MAX = np.array([135,115,100])
 
         # Color threshold
         self.imgThreshBlock = cv2.inRange(self.imgHSV,MIN,MAX)
@@ -154,14 +178,11 @@ class locate_stuff():
         self.imgThreshBlock[botW:,:] = 0
 
         # Check if there's enough green pixels to constitute a block
-        if float(cv2.countNonZero(self.imgThreshBlock))/(self.img.shape[0]*self.img.shape[1]) >= 0.005:
+        if float(cv2.countNonZero(self.imgThreshBlock))/(self.img.shape[0]*self.img.shape[1]) >= 0.015:
             # m = cv2.moments(self.imgThreshBlock)
             # print "I see a block"
             # dx = x - self.center[0]
             # dy = self.center[1] - y
-
-            # Do OCR
-            self.OCR()
             
             # Find the right contour
             c,h = cv2.findContours(self.imgThreshBlock,1,2)
@@ -181,6 +202,9 @@ class locate_stuff():
            
             self.box = cv2.cv.BoxPoints(rect)
             self.box = np.int0(self.box)
+
+            # Do OCR
+            # self.OCR()
             
             # print(self.box)
 
@@ -203,12 +227,41 @@ class locate_stuff():
 
     # Recognise numbers on block
     def OCR(self):
-    	
-    	tesseract.SetCvImage(self.img,self.ocrAPI)
-     	text=self.ocrAPI.GetUTF8Text()
-     	print 'Block number is ' + str(text)
-        
+    	# import pdb; pdb.set_trace()
 
+    	# Convert to openCV 1 image type
+    	hT,wT,cT = self.img.shape
+
+    	# Generate box threshold
+    	imgBlockMask = np.zeros((hT,wT,3), np.uint8)
+
+    	cv2.drawContours(imgBlockMask,[self.box],0,(255,255,255),-1)
+
+    	imgBlockMask = cv2.cvtColor(imgBlockMask,cv2.COLOR_BGR2GRAY)
+    	r,imgBlockMask = cv2.threshold(imgBlockMask,128,255,cv2.THRESH_BINARY)
+
+    	imgOCRBlock = cv2.bitwise_and(self.img,self.img,mask = imgBlockMask)
+
+    	imgOCRBlock = cv2.cvtColor(imgOCRBlock,cv2.COLOR_BGR2GRAY)
+    	# imgOCRNumMask = cv2.adaptiveThreshold(imgOCRBlock,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,cv2.THRESH_BINARY,3,5)
+    	r,imgOCRNumMask = cv2.threshold(imgOCRBlock,50,255,cv2.THRESH_BINARY)
+
+    	imgOCR = cv2.bitwise_and(imgOCRBlock,imgOCRBlock,mask = imgOCRNumMask)
+
+    	# Show the OCR threshold image
+    	cv2.imshow('Threshold Image',imgOCR)
+    	cv2.waitKey(5)
+
+    	ocrImg = cv.CreateImageHeader((wT,hT), cv.IPL_DEPTH_8U, cT)
+    	cv.SetData(ocrImg,imgOCR.tostring(),imgOCR.dtype.itemsize * cT * (wT))
+    	tesseract.SetCvImage(ocrImg,self.ocrAPI)
+
+    	# Try to find some numbers
+     	self.lastBlock=self.ocrAPI.GetUTF8Text()
+     	self.lastBlock.strip(string.whitespace).replace("\n", "")
+     	print 'Block number is: ' + self.lastBlock
+        
+ 
 # Main loop
 def main():
     
