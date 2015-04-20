@@ -27,7 +27,7 @@ class Controller():
         self.tableZ = -.07
         self.scanZ = .3
         self.safeZ = .08
-        self.xyTol = .01
+        self.xyTol = .005
         self.thetaTol = .3
         self.bowlD = .15
         self.controlGain = .5
@@ -174,7 +174,7 @@ class Controller():
             else:
                 xpos = start.position.x + self.bowlD*(random() - .5)
                 ypos = start.position.y + self.bowlD*(random() - .5)
-                ps = Pose(Point(xpos, ypos, self.scanZ), self.downwards)
+                ps = Pose(Point(xpos, ypos, self.safeZ), self.downwards)
                 self.baxter.setEndPose('right', ps)
 
     # This function must be run only when we are reliably in range of an object
