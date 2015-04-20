@@ -68,6 +68,12 @@ class Controller():
         eu = euler_from_quaternion([p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w])
         return self.rerange(eu[2]+3.14159)
 
+    # Convenience function for changing the angular alignment only
+    def setW(self, w):
+        p = self.baxter.getEndPose('right')
+        p.orientation = self.e2q(0, 3.14, w)
+        self.baxter.setEndPose('right',p)
+
     # Puts a value in the -pi to pi range
     def rerange(self, val):
         if val > 3.14159:
@@ -95,7 +101,7 @@ class Controller():
         rospy.wait_for_service('find_stuff')
         bowl = self.cv('bowl')
 	oldx = bowl.x
-        bowl.x = self.pix2m(bowl.y)
+        bowl.x = self.pix2m(bowl.y) - .035
         bowl.y = -self.pix2m(oldx)
         return bowl
 
@@ -105,7 +111,7 @@ class Controller():
         rospy.wait_for_service('find_stuff')
         block = self.cv('block')
 	oldx = block.x
-        block.x = self.pix2m(block.y)
+        block.x = self.pix2m(block.y) - .035
         block.y = -self.pix2m(oldx)
         return block
 
@@ -172,15 +178,44 @@ class Controller():
     # This function must be run only when we are reliably in range of an object
     # It performs choppy closed-loop semi-proportional control of the end effector
     # until it is aligned and directly over the object.
-    def controlToObject(self, objective):
+    def controlTo(self, objective):
 
         rospy.loginfo('Controlling to %s center...' % objective)
 
         # Some setup: convenience function, limits, initial conditions
         clamp = lambda n, minn, maxn: max(min(maxn, n), minn)
-        delTheta = 1000
         delY = 1000
         delX = 1000
+        self.setW(0)
+
+        # Select objective function
+        if objective == 'block':
+            objfun = lambda: self.getBlock()
+        else:
+            objfun = lambda: self.getBowl()
+
+        # Control loop. Never. Give. Up.
+        while True:
+            ps = self.baxter.getEndPose('right')
+            obj = objfun()
+            if not obj.found:
+                rospy.loginfo('Lost %s! Aborting control.' % objective)
+                return  
+            delY = abs(obj.y)
+            delX = abs(obj.x)
+            if (delY < self.xyTol) and (delX < self.xyTol):
+                rospy.loginfo('Center control complete.')                
+                return ps
+            newx = clamp(ps.position.x + (obj.x * self.controlGain), self.xmin, self.xmax)
+            newy = clamp(ps.position.y + (obj.y * self.controlGain), self.ymin, self.ymax)
+            ps = Pose(Point(newx, newy, ps.position.z), self.downwards)
+            self.baxter.setEndPose('right', ps)
+
+    # This does the rotational alignment control.
+    def alignWith(self, objective):
+
+        rospy.loginfo('Aligning with %s ...' % objective)
+        delTheta = 1000
 
         # Select objective function
         if objective == 'block':
@@ -199,27 +234,22 @@ class Controller():
                 delTheta = abs(obj.t)
             else:
                 delTheta = 0
-            delY = abs(obj.y)
-            delX = abs(obj.x)
-            if (delTheta < self.thetaTol) and (delY < self.xyTol) and (delX < self.xyTol):
-                rospy.loginfo('Center control complete.')                
+            if (delTheta < self.thetaTol):
+                rospy.loginfo('Alignment complete.')                
                 return ps
-            newx = clamp(ps.position.x + (obj.x * self.controlGain), self.xmin, self.xmax)
-            newy = clamp(ps.position.y + (obj.y * self.controlGain), self.ymin, self.ymax)
             newt = self.rerange(self.getW(ps)- obj.t)
-            import pdb; pdb.set_trace()
-            ps = Pose(Point(newx, newy, ps.position.z), self.e2q(0, 3.14, newt))
-            self.baxter.setEndPose('right', ps)
+            self.setW(newt)
 
     # Performs the sequence of actions required to accomplish HW5 CV objectives.
     def execute(self):
         self.scanForBowl()
-        self.controlToObject('bowl')
+        self.controlTo('bowl')
         self.scanForBlock()
         ps = self.baxter.getEndPose('right')
         ps.position.z = self.safeZ
         self.baxter.setEndPose('right', ps)
-        bPose = self.controlToObject('block')
+        bPose = self.controlTo('block')
+        bPose = self.alignWith('block')
         bPose.position.z = self.tableZ
         self.pickPlace(bPose, self.destination)
         rospy.loginfo('All done!')
