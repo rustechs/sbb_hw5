@@ -33,7 +33,10 @@ class Baxter():
         self.name = baxter_name
 
         # Create head instance
-        self.head = baxter_interface.Head()
+        try:
+            self.head = baxter_interface.Head()
+        except:
+            rospy.logerr('HEADS up: robot_interface could not find head.')
         
         # Create baxter arm instances
         self.right_arm = baxter_interface.Limb('right')
