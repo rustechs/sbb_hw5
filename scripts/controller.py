@@ -13,6 +13,7 @@ import rospy, robot_interface
 from random import random
 from sbb_hw5.srv import *
 from geometry_msgs.msg import Point, Quaternion, Pose
+from tf.transformations import quaternion_from_euler, euler_from_quaternion
 
 # The controller class.
 class Controller():
@@ -38,7 +39,7 @@ class Controller():
         self.ymax = -.1
 
         # Convient poses, orientations, etc
-        self.downwards = Quaternion(1, 0, 0, 0)
+        self.downwards = self.e2q(0, 3.14, 0)
         self.home = Pose(Point(.5, -.5, self.scanZ), self.downwards)
         self.destination = Pose(Point(.5, 0, self.tableZ), self.downwards)
 
@@ -56,6 +57,25 @@ class Controller():
         # This node makes use of the find_stuff service
         self.cv = rospy.ServiceProxy('find_stuff', FindStuffSrv)
         rospy.loginfo('Initialization successful.')
+
+    # Convenience function for euler_to_quaternion that returns as Quaternion.
+    def e2q(self, x, y, z):
+        q = tuple(quaternion_from_euler(x, y, z))
+        return Quaternion(*q)
+
+    # Convenience function for getting the angular alignment in YZ plane from pose
+    def getW(self, p):
+        eu = euler_from_quaternion([p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w])
+        return self.rerange(eu[2]+3.14159)
+
+    # Puts a value in the -pi to pi range
+    def rerange(self, val):
+        if val > 3.14159:
+            return (val % (2*3.14159)) - 2*3.14159
+        elif val < -3.14159:
+            return -(-val % (2*3.14159)) + 2*3.14159
+        else:
+            return val
 
     # This function converts pixels to meters on the table plan given a height.
     # It assumes/requires a downward orientation.
@@ -82,9 +102,9 @@ class Controller():
     # Get a response from CV service: found, x, y, theta
     # x, y are converted to meters before returning
     def getBlock(self):
-        rospy.wait_for_servce('find_stuff')
+        rospy.wait_for_service('find_stuff')
         block = self.cv('block')
-	oldx = bowl.x
+	oldx = block.x
         block.x = self.pix2m(block.y)
         block.y = -self.pix2m(oldx)
         return block
@@ -97,7 +117,7 @@ class Controller():
         rospy.loginfo('Performing pick/place.')
 
         # Make safe pre-pick pose and go
-        ps = Pose(Point(fromP.x, fromP.y, fromP.z + self.safeZ), fromP.orientation)
+        ps = Pose(Point(fromP.position.x, fromP.position.y, self.safeZ), fromP.orientation)
         self.baxter.openGrip('right')
         self.baxter.setEndPose('right', ps)
 
@@ -107,7 +127,7 @@ class Controller():
 
         # Path to place pose through safe points
         self.baxter.setEndPose('right', ps)
-        ps = Pose(Point(toP.x, toP.y, toP.z + self.safeZ), toP.orientation)
+        ps = Pose(Point(toP.position.x, toP.position.y, self.safeZ), toP.orientation)
         self.baxter.setEndPose('right', ps)
         self.baxter.setEndPose('right', toP)
 
@@ -181,13 +201,14 @@ class Controller():
                 delTheta = 0
             delY = abs(obj.y)
             delX = abs(obj.x)
-            if (delTheta < thetaTol) and (delY < self.xyTol) and (delX < self.xyTol):
+            if (delTheta < self.thetaTol) and (delY < self.xyTol) and (delX < self.xyTol):
                 rospy.loginfo('Center control complete.')                
                 return ps
-            newx = clamp(ps.position.x - (obj.x * self.controlGain), self.xmin, self.xmax)
-            newy = clamp(ps.position.y - (obj.y * self.controlGain), self.ymin, self.ymax)
-            newt = ps.orientation.w - delTheta
-            ps = Pose(Point(newx, newy, ps.position.z), Quaternion(1,0,0,newt))
+            newx = clamp(ps.position.x + (obj.x * self.controlGain), self.xmin, self.xmax)
+            newy = clamp(ps.position.y + (obj.y * self.controlGain), self.ymin, self.ymax)
+            newt = self.rerange(self.getW(ps)- obj.t)
+            import pdb; pdb.set_trace()
+            ps = Pose(Point(newx, newy, ps.position.z), self.e2q(0, 3.14, newt))
             self.baxter.setEndPose('right', ps)
 
     # Performs the sequence of actions required to accomplish HW5 CV objectives.
